@@ -1,0 +1,2049 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Trusted Device Simulator | BiometricAuth Platform</title>
+  <meta name="description"
+    content="Developer-facing trusted device simulator for the BiometricAuth verification pipeline — BiometricAuth Platform." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap"
+    rel="stylesheet" />
+  <!-- Socket.IO: served locally — no CDN dependency, guaranteed version match -->
+  <script src="/socket.io.min.js"></script>
+
+  <style>
+    /* ── Reset ── */
+    *,
+    *::before,
+    *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    :root {
+      --bg: #04040f;
+      --glass: rgba(255, 255, 255, 0.04);
+      --glass-border: rgba(255, 255, 255, 0.08);
+      --purple: #8b5cf6;
+      --purple-light: #a78bfa;
+      --cyan: #22d3ee;
+      --green: #10b981;
+      --red: #ef4444;
+      --amber: #f59e0b;
+      --text: #f1f5f9;
+      --text-muted: #64748b;
+      --text-dim: #94a3b8;
+      --mono: 'JetBrains Mono', monospace;
+    }
+
+    html,
+    body {
+      height: 100%;
+      font-family: 'Inter', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      overflow-x: hidden;
+    }
+
+    /* animated grid */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image:
+        linear-gradient(rgba(139, 92, 246, .03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(139, 92, 246, .03) 1px, transparent 1px);
+      background-size: 40px 40px;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    /* radial glow */
+    body::after {
+      content: '';
+      position: fixed;
+      top: -200px;
+      left: -200px;
+      width: 600px;
+      height: 600px;
+      background: radial-gradient(circle, rgba(139, 92, 246, .12) 0%, transparent 70%);
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    /* ══════════════════════════════════════════════
+       PAGE HEADER
+    ══════════════════════════════════════════════ */
+    .page-header {
+      position: relative;
+      z-index: 10;
+      padding: 16px 36px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid var(--glass-border);
+      background: rgba(4, 4, 15, .85);
+      backdrop-filter: blur(20px);
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .brand-icon {
+      width: 36px;
+      height: 36px;
+      background: linear-gradient(135deg, var(--purple), var(--cyan));
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
+    }
+
+    .brand-title {
+      font-size: 15px;
+      font-weight: 700;
+      background: linear-gradient(135deg, var(--purple-light), var(--cyan));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .brand-sub {
+      font-size: 11px;
+      color: var(--text-muted);
+      margin-top: 1px;
+    }
+
+    .conn-pill {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 16px;
+      border-radius: 20px;
+      background: var(--glass);
+      border: 1px solid var(--glass-border);
+      font-size: 12px;
+      font-weight: 500;
+      transition: all .3s;
+    }
+
+    .conn-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--red);
+      transition: background .3s;
+    }
+
+    .conn-dot.online {
+      background: var(--green);
+      animation: pulse-dot 2s infinite;
+    }
+
+    @keyframes pulse-dot {
+
+      0%,
+      100% {
+        box-shadow: 0 0 0 0 rgba(16, 185, 129, .5);
+      }
+
+      50% {
+        box-shadow: 0 0 0 6px rgba(16, 185, 129, 0);
+      }
+    }
+
+    /* ══════════════════════════════════════════════
+       MAIN 3-COLUMN LAYOUT
+    ══════════════════════════════════════════════ */
+    .layout {
+      position: relative;
+      z-index: 1;
+      display: grid;
+      grid-template-columns: 310px 1fr 310px;
+      height: calc(100vh - 69px);
+      overflow: hidden;
+    }
+
+    /* ── Side panels ── */
+    .panel {
+      padding: 20px;
+      overflow-y: auto;
+      border-right: 1px solid var(--glass-border);
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    .panel:last-child {
+      border-right: none;
+      border-left: 1px solid var(--glass-border);
+    }
+
+    .panel::-webkit-scrollbar {
+      width: 3px;
+    }
+
+    .panel::-webkit-scrollbar-thumb {
+      background: rgba(139, 92, 246, .25);
+      border-radius: 2px;
+    }
+
+    .card {
+      background: var(--glass);
+      border: 1px solid var(--glass-border);
+      border-radius: 16px;
+      padding: 18px;
+      backdrop-filter: blur(10px);
+    }
+
+    .card-title {
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: .1em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      margin-bottom: 14px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .card-title::before {
+      content: '';
+      display: inline-block;
+      width: 3px;
+      height: 11px;
+      background: var(--purple);
+      border-radius: 2px;
+    }
+
+    /* ── Form elements ── */
+    .form-group {
+      margin-bottom: 10px;
+    }
+
+    .lbl {
+      font-size: 11px;
+      color: var(--text-dim);
+      margin-bottom: 5px;
+      display: block;
+    }
+
+    .inp {
+      width: 100%;
+      padding: 10px 13px;
+      background: rgba(0, 0, 0, .35);
+      border: 1px solid var(--glass-border);
+      border-radius: 10px;
+      color: var(--text);
+      font-family: var(--mono);
+      font-size: 12px;
+      outline: none;
+      transition: border-color .2s, box-shadow .2s;
+    }
+
+    .inp:focus {
+      border-color: var(--purple);
+      box-shadow: 0 0 0 3px rgba(139, 92, 246, .15);
+    }
+
+    .inp::placeholder {
+      color: var(--text-muted);
+    }
+
+    /* ── Buttons ── */
+    .btn {
+      width: 100%;
+      padding: 10px 18px;
+      border: none;
+      border-radius: 10px;
+      font-family: 'Inter', sans-serif;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all .2s;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, var(--purple), #6d28d9);
+      color: #fff;
+      box-shadow: 0 4px 15px rgba(139, 92, 246, .3);
+    }
+
+    .btn-primary:hover:not(:disabled) {
+      transform: translateY(-1px);
+      box-shadow: 0 6px 22px rgba(139, 92, 246, .45);
+    }
+
+    .btn-primary:disabled {
+      opacity: .4;
+      cursor: not-allowed;
+    }
+
+    .btn-ghost {
+      background: var(--glass);
+      border: 1px solid var(--glass-border);
+      color: var(--text-dim);
+    }
+
+    .btn-ghost:hover {
+      background: rgba(255, 255, 255, .07);
+    }
+
+    /* ── KV badge ── */
+    .kv {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 9px 13px;
+      background: rgba(139, 92, 246, .07);
+      border: 1px solid rgba(139, 92, 246, .15);
+      border-radius: 10px;
+      margin-bottom: 8px;
+    }
+
+    .kv-k {
+      font-size: 10px;
+      color: var(--text-muted);
+    }
+
+    .kv-v {
+      font-size: 11px;
+      font-family: var(--mono);
+      color: var(--purple-light);
+    }
+
+    /* ── Activity log ── */
+    .log-wrap {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      max-height: 240px;
+      overflow-y: auto;
+    }
+
+    .log-wrap::-webkit-scrollbar {
+      width: 2px;
+    }
+
+    .log-wrap::-webkit-scrollbar-thumb {
+      background: rgba(139, 92, 246, .2);
+      border-radius: 1px;
+    }
+
+    .log-entry {
+      display: flex;
+      gap: 8px;
+      align-items: flex-start;
+      font-size: 10.5px;
+      padding: 7px 9px;
+      background: rgba(0, 0, 0, .2);
+      border-radius: 7px;
+      border-left: 2px solid transparent;
+      animation: slideLog .25s ease;
+    }
+
+    .log-entry.info {
+      border-left-color: var(--cyan);
+    }
+
+    .log-entry.success {
+      border-left-color: var(--green);
+    }
+
+    .log-entry.error {
+      border-left-color: var(--red);
+    }
+
+    .log-entry.warning {
+      border-left-color: var(--amber);
+    }
+
+    @keyframes slideLog {
+      from {
+        opacity: 0;
+        transform: translateX(-8px);
+      }
+
+      to {
+        opacity: 1;
+        transform: none;
+      }
+    }
+
+    .log-t {
+      color: var(--text-muted);
+      white-space: nowrap;
+      font-family: var(--mono);
+    }
+
+    .log-m {
+      color: var(--text-dim);
+      line-height: 1.4;
+    }
+
+    /* ── User status row ── */
+    .user-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 12px 13px;
+      background: rgba(16, 185, 129, .06);
+      border: 1px solid rgba(16, 185, 129, .14);
+      border-radius: 12px;
+    }
+
+    .avatar {
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      flex-shrink: 0;
+      background: linear-gradient(135deg, var(--purple), var(--cyan));
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 15px;
+      font-weight: 800;
+      color: #fff;
+    }
+
+    .u-info {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .u-name {
+      font-size: 13px;
+      font-weight: 600;
+    }
+
+    .u-role {
+      font-size: 10px;
+      color: var(--text-muted);
+    }
+
+    .u-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--green);
+      box-shadow: 0 0 0 3px rgba(16, 185, 129, .2);
+    }
+
+    /* ══════════════════════════════════════════════
+       PHONE CENTER COLUMN
+    ══════════════════════════════════════════════ */
+    .phone-col {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px 16px;
+      overflow: hidden;
+      position: relative;
+    }
+
+    /* ambient glow */
+    .phone-col::after {
+      content: '';
+      position: absolute;
+      bottom: -10px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 280px;
+      height: 50px;
+      background: radial-gradient(ellipse, rgba(139, 92, 246, .35) 0%, transparent 70%);
+      filter: blur(18px);
+      pointer-events: none;
+      border-radius: 50%;
+    }
+
+    /* ── Phone Frame ── */
+    .phone-frame {
+      position: relative;
+      width: 375px;
+      height: 780px;
+      flex-shrink: 0;
+    }
+
+    .phone-shell {
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(155deg, #262638 0%, #111125 45%, #0c0c1f 100%);
+      border-radius: 52px;
+      box-shadow:
+        0 0 0 1px rgba(255, 255, 255, .12),
+        0 0 0 2px rgba(0, 0, 0, .7),
+        0 50px 90px rgba(0, 0, 0, .9),
+        inset 0 1px 0 rgba(255, 255, 255, .14),
+        inset 0 -1px 0 rgba(0, 0, 0, .4);
+    }
+
+    .phone-btn {
+      position: absolute;
+      background: linear-gradient(180deg, #1c1c2e, #14142a);
+      border-radius: 3px;
+    }
+
+    .pbtn-vol-up {
+      left: -4px;
+      top: 128px;
+      width: 4px;
+      height: 34px;
+      box-shadow: -1px 0 0 rgba(255, 255, 255, .04);
+    }
+
+    .pbtn-vol-down {
+      left: -4px;
+      top: 174px;
+      width: 4px;
+      height: 34px;
+      box-shadow: -1px 0 0 rgba(255, 255, 255, .04);
+    }
+
+    .pbtn-power {
+      right: -4px;
+      top: 158px;
+      width: 4px;
+      height: 56px;
+      box-shadow: 1px 0 0 rgba(255, 255, 255, .04);
+    }
+
+    /* ── Screen ── */
+    .phone-screen {
+      position: absolute;
+      top: 12px;
+      left: 12px;
+      right: 12px;
+      bottom: 12px;
+      background: #000;
+      border-radius: 42px;
+      overflow: hidden;
+    }
+
+    /* ── Dynamic Island ── */
+    .di {
+      position: absolute;
+      top: 14px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 118px;
+      height: 34px;
+      background: #000;
+      border-radius: 20px;
+      z-index: 100;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      overflow: hidden;
+      transition: all .45s cubic-bezier(.34, 1.56, .64, 1);
+    }
+
+    .di.open {
+      width: 300px;
+      height: 66px;
+      border-radius: 26px;
+    }
+
+    .di-cam {
+      width: 12px;
+      height: 12px;
+      background: #111;
+      border-radius: 50%;
+      border: 1px solid rgba(255, 255, 255, .05);
+      flex-shrink: 0;
+      position: relative;
+    }
+
+    .di-cam::after {
+      content: '';
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 5px;
+      height: 5px;
+      background: #090909;
+      border-radius: 50%;
+    }
+
+    .di-body {
+      display: none;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .di.open .di-body {
+      display: flex;
+    }
+
+    .di.open .di-cam {
+      display: none;
+    }
+
+    .di-ico {
+      font-size: 22px;
+    }
+
+    .di-txt {
+      font-size: 12px;
+      font-weight: 600;
+      color: #fff;
+    }
+
+    .di-sub {
+      font-size: 10px;
+      color: rgba(255, 255, 255, .5);
+    }
+
+    /* ── Status bar ── */
+    .status-bar {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 56px;
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      padding: 0 24px 8px;
+      z-index: 50;
+      font-size: 13px;
+      font-weight: 600;
+    }
+
+    .status-icons {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      font-size: 11px;
+    }
+
+    /* ── Views ── */
+    .view {
+      position: absolute;
+      inset: 0;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity .4s ease;
+    }
+
+    .view.active {
+      opacity: 1;
+      pointer-events: all;
+    }
+
+    /* ── Lock screen ── */
+    .view-lock {
+      background: linear-gradient(155deg, #0b0b20 0%, #0d0d28 55%, #08080f 100%);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-start;
+      padding-top: 76px;
+    }
+
+    .lock-clock {
+      font-size: 76px;
+      font-weight: 200;
+      letter-spacing: -3px;
+      color: #fff;
+      margin-bottom: 4px;
+      text-shadow: 0 0 40px rgba(139, 92, 246, .35);
+    }
+
+    .lock-date {
+      font-size: 14px;
+      color: rgba(255, 255, 255, .55);
+      margin-bottom: 32px;
+    }
+
+    .lock-art {
+      width: 180px;
+      height: 180px;
+      margin: 10px 0;
+      background: radial-gradient(circle at 35% 35%, rgba(139, 92, 246, .45), rgba(34, 211, 238, .2), transparent 70%);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 64px;
+      filter: drop-shadow(0 0 24px rgba(139, 92, 246, .5));
+    }
+
+    .lock-hint {
+      position: absolute;
+      bottom: 56px;
+      left: 0;
+      right: 0;
+      text-align: center;
+      font-size: 12px;
+      color: rgba(255, 255, 255, .35);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .lock-hint-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, .3);
+      animation: breathe 3s ease-in-out infinite;
+    }
+
+    @keyframes breathe {
+
+      0%,
+      100% {
+        opacity: .3;
+        transform: scale(1);
+      }
+
+      50% {
+        opacity: 1;
+        transform: scale(1.4);
+      }
+    }
+
+    .home-bar {
+      position: absolute;
+      bottom: 8px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 134px;
+      height: 5px;
+      background: rgba(255, 255, 255, .2);
+      border-radius: 3px;
+    }
+
+    /* ── Notification banner ── */
+    .notif-banner {
+      position: absolute;
+      top: 60px;
+      left: 10px;
+      right: 10px;
+      z-index: 200;
+      background: rgba(28, 28, 48, .96);
+      backdrop-filter: blur(28px);
+      border: 1px solid rgba(255, 255, 255, .1);
+      border-radius: 18px;
+      padding: 13px 15px;
+      box-shadow: 0 20px 40px rgba(0, 0, 0, .55);
+      transform: translateY(-120px);
+      opacity: 0;
+      transition: all .5s cubic-bezier(.34, 1.56, .64, 1);
+    }
+
+    .notif-banner.show {
+      transform: translateY(0);
+      opacity: 1;
+    }
+
+    .nb-head {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 5px;
+    }
+
+    .nb-app-icon {
+      width: 22px;
+      height: 22px;
+      background: linear-gradient(135deg, var(--purple), var(--cyan));
+      border-radius: 6px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 11px;
+    }
+
+    .nb-app-name {
+      font-size: 10px;
+      font-weight: 600;
+      color: rgba(255, 255, 255, .65);
+      flex: 1;
+    }
+
+    .nb-time {
+      font-size: 10px;
+      color: rgba(255, 255, 255, .35);
+    }
+
+    .nb-title {
+      font-size: 14px;
+      font-weight: 700;
+      color: #fff;
+    }
+
+    .nb-body {
+      font-size: 11px;
+      color: rgba(255, 255, 255, .55);
+      margin-top: 2px;
+    }
+
+    /* ── Word-game verification view ── */
+    .view-verify {
+      background: linear-gradient(180deg, #0b0b1e 0%, #050510 100%);
+      display: flex;
+      flex-direction: column;
+      padding: 70px 18px 58px;
+      overflow-y: auto;
+    }
+
+    .view-verify::-webkit-scrollbar {
+      display: none;
+    }
+
+    .vfy-head {
+      text-align: center;
+      margin-bottom: 16px;
+    }
+
+    .vfy-icon {
+      font-size: 34px;
+      margin-bottom: 6px;
+      display: block;
+    }
+
+    .vfy-title {
+      font-size: 17px;
+      font-weight: 700;
+      margin-bottom: 4px;
+    }
+
+    .vfy-sid {
+      font-size: 10px;
+      font-family: var(--mono);
+      color: var(--text-muted);
+      background: rgba(139, 92, 246, .1);
+      padding: 3px 10px;
+      border-radius: 6px;
+      border: 1px solid rgba(139, 92, 246, .2);
+      display: inline-block;
+      margin-top: 4px;
+    }
+
+    .vfy-hint {
+      font-size: 11.5px;
+      color: var(--text-muted);
+      text-align: center;
+      line-height: 1.55;
+      margin-bottom: 14px;
+      padding: 11px 14px;
+      background: rgba(34, 211, 238, .05);
+      border: 1px solid rgba(34, 211, 238, .1);
+      border-radius: 12px;
+    }
+
+    .vfy-hint strong {
+      color: var(--cyan);
+      display: block;
+      font-size: 12.5px;
+      margin-bottom: 3px;
+    }
+
+    /* Word pills */
+    .words-grid {
+      display: flex;
+      flex-direction: column;
+      gap: 7px;
+      margin-bottom: 14px;
+    }
+
+    .word-pill {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 11px 16px;
+      background: rgba(255, 255, 255, .04);
+      border: 1px solid rgba(255, 255, 255, .08);
+      border-radius: 13px;
+      cursor: pointer;
+      transition: all .2s;
+      font-size: 14px;
+      font-weight: 500;
+      position: relative;
+      overflow: hidden;
+      user-select: none;
+    }
+
+    .word-pill::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(135deg, rgba(139, 92, 246, .15), rgba(34, 211, 238, .08));
+      opacity: 0;
+      transition: opacity .2s;
+    }
+
+    .word-pill:hover {
+      border-color: rgba(139, 92, 246, .45);
+      transform: scale(1.025);
+    }
+
+    .word-pill:hover::before {
+      opacity: 1;
+    }
+
+    .word-pill.selected {
+      border-color: var(--purple);
+      background: rgba(139, 92, 246, .12);
+    }
+
+    .word-pill.selected::before {
+      opacity: 1;
+    }
+
+    .word-pill.dim {
+      opacity: .38;
+      cursor: not-allowed;
+      transform: none !important;
+    }
+
+    .wp-badge {
+      width: 22px;
+      height: 22px;
+      border-radius: 7px;
+      background: rgba(255, 255, 255, .07);
+      border: 1px solid rgba(255, 255, 255, .1);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--text-muted);
+      transition: all .2s;
+    }
+
+    .word-pill.selected .wp-badge {
+      background: var(--purple);
+      border-color: var(--purple);
+      color: #fff;
+    }
+
+    /* Selection preview */
+    .sel-preview {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 12px;
+      min-height: 34px;
+    }
+
+    .sel-chip {
+      padding: 5px 13px;
+      background: rgba(139, 92, 246, .15);
+      border: 1px solid rgba(139, 92, 246, .3);
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--purple-light);
+      animation: chipIn .2s ease;
+    }
+
+    @keyframes chipIn {
+      from {
+        transform: scale(.8);
+        opacity: 0;
+      }
+
+      to {
+        transform: scale(1);
+        opacity: 1;
+      }
+    }
+
+    .sel-arrow {
+      color: var(--text-muted);
+      font-size: 15px;
+    }
+
+    .sel-ph {
+      font-size: 11.5px;
+      color: var(--text-muted);
+    }
+
+    /* Verify actions */
+    .vfy-actions {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .btn-submit {
+      padding: 13px;
+      border: none;
+      border-radius: 13px;
+      background: linear-gradient(135deg, var(--purple), #6d28d9);
+      color: #fff;
+      font-size: 14px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all .2s;
+      box-shadow: 0 4px 18px rgba(139, 92, 246, .4);
+    }
+
+    .btn-submit:hover:not(:disabled) {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 26px rgba(139, 92, 246, .5);
+    }
+
+    .btn-submit:disabled {
+      opacity: .38;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    .btn-deny {
+      padding: 11px;
+      border: 1px solid rgba(239, 68, 68, .3);
+      border-radius: 13px;
+      background: rgba(239, 68, 68, .07);
+      color: var(--red);
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all .2s;
+    }
+
+    .btn-deny:hover {
+      background: rgba(239, 68, 68, .14);
+    }
+
+    .btn-clear {
+      padding: 7px;
+      border: 1px solid var(--glass-border);
+      border-radius: 9px;
+      background: transparent;
+      color: var(--text-muted);
+      font-size: 11.5px;
+      cursor: pointer;
+      transition: all .2s;
+    }
+
+    .btn-clear:hover {
+      background: var(--glass);
+    }
+
+    /* ── Result view ── */
+    .view-result {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 14px;
+      padding: 36px 22px;
+    }
+
+    .view-result.ok {
+      background: linear-gradient(180deg, #022c22 0%, #050510 100%);
+    }
+
+    .view-result.err {
+      background: linear-gradient(180deg, #2d1515 0%, #050510 100%);
+    }
+
+    .res-icon {
+      font-size: 80px;
+      animation: resBounce .55s cubic-bezier(.34, 1.56, .64, 1);
+    }
+
+    @keyframes resBounce {
+      from {
+        transform: scale(0);
+        opacity: 0;
+      }
+
+      to {
+        transform: scale(1);
+        opacity: 1;
+      }
+    }
+
+    .res-title {
+      font-size: 22px;
+      font-weight: 800;
+      text-align: center;
+    }
+
+    .res-subtitle {
+      font-size: 12.5px;
+      color: var(--text-muted);
+      text-align: center;
+      line-height: 1.5;
+      max-width: 260px;
+    }
+
+    .res-timer {
+      font-size: 11px;
+      color: var(--text-muted);
+      font-family: var(--mono);
+      padding: 5px 14px;
+      background: var(--glass);
+      border-radius: 20px;
+      border: 1px solid var(--glass-border);
+    }
+
+    /* ══════════════════════════════════════════════
+       QR PANEL
+    ══════════════════════════════════════════════ */
+    .qr-textarea {
+      width: 100%;
+      padding: 10px 13px;
+      background: rgba(0, 0, 0, .3);
+      border: 1px solid var(--glass-border);
+      border-radius: 10px;
+      color: var(--text);
+      font-family: var(--mono);
+      font-size: 11px;
+      outline: none;
+      resize: none;
+      height: 78px;
+      transition: border-color .2s, box-shadow .2s;
+    }
+
+    .qr-textarea:focus {
+      border-color: var(--cyan);
+      box-shadow: 0 0 0 3px rgba(34, 211, 238, .1);
+    }
+
+    .qr-textarea::placeholder {
+      color: var(--text-muted);
+    }
+
+    .parsed-box {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      padding: 11px 13px;
+      background: rgba(34, 211, 238, .04);
+      border: 1px solid rgba(34, 211, 238, .1);
+      border-radius: 10px;
+      font-size: 11px;
+      font-family: var(--mono);
+    }
+
+    .prow {
+      display: flex;
+      gap: 8px;
+      align-items: flex-start;
+    }
+
+    .pk {
+      color: var(--cyan);
+      min-width: 56px;
+      flex-shrink: 0;
+    }
+
+    .pv {
+      color: var(--text-dim);
+      word-break: break-all;
+    }
+
+    .qr-badge {
+      padding: 10px 13px;
+      border-radius: 10px;
+      font-size: 12px;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .qr-badge.ok {
+      background: rgba(16, 185, 129, .1);
+      border: 1px solid rgba(16, 185, 129, .2);
+      color: var(--green);
+    }
+
+    .qr-badge.err {
+      background: rgba(239, 68, 68, .1);
+      border: 1px solid rgba(239, 68, 68, .2);
+      color: var(--red);
+    }
+
+    /* tip boxes */
+    .tip {
+      padding: 10px 12px;
+      border-radius: 10px;
+      margin-bottom: 0;
+    }
+
+    .tip-cyan {
+      background: rgba(34, 211, 238, .04);
+      border: 1px solid rgba(34, 211, 238, .1);
+    }
+
+    .tip-purple {
+      background: rgba(139, 92, 246, .04);
+      border: 1px solid rgba(139, 92, 246, .1);
+    }
+
+    .tip-green {
+      background: rgba(16, 185, 129, .04);
+      border: 1px solid rgba(16, 185, 129, .1);
+    }
+
+    .tip-head {
+      font-size: 11px;
+      font-weight: 700;
+      margin-bottom: 4px;
+    }
+
+    .tip-body {
+      font-size: 10.5px;
+      color: var(--text-muted);
+      line-height: 1.55;
+    }
+
+    code {
+      font-family: var(--mono);
+      color: var(--purple-light);
+    }
+
+    /* ══════════════════════════════════════════════
+       VIBRATION OVERLAY
+    ══════════════════════════════════════════════ */
+    #vibeRing {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: 9999;
+    }
+
+    #vibeRing.active {
+      animation: vibeRing .55s ease 3;
+    }
+
+    @keyframes vibeRing {
+      0% {
+        box-shadow: inset 0 0 0 0 rgba(139, 92, 246, 0);
+      }
+
+      50% {
+        box-shadow: inset 0 0 0 10px rgba(139, 92, 246, .4);
+      }
+
+      100% {
+        box-shadow: inset 0 0 0 0 rgba(139, 92, 246, 0);
+      }
+    }
+
+    /* ══════════════════════════════════════════════
+       UTILITIES
+    ══════════════════════════════════════════════ */
+    .hidden {
+      display: none !important;
+    }
+
+    .mt8 {
+      margin-top: 8px;
+    }
+
+    .mt12 {
+      margin-top: 12px;
+    }
+
+    .flex-gap8 {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    @keyframes spin {
+      to {
+        transform: rotate(360deg);
+      }
+    }
+
+    .spinner {
+      display: inline-block;
+      width: 13px;
+      height: 13px;
+      border: 2px solid rgba(255, 255, 255, .2);
+      border-top-color: #fff;
+      border-radius: 50%;
+      animation: spin .6s linear infinite;
+      vertical-align: middle;
+      margin-right: 6px;
+    }
+  </style>
+</head>
+
+<body>
+
+  <!-- Vibration flash overlay -->
+  <div id="vibeRing"></div>
+
+  <!-- ══════════════════════════════════════════════
+     HEADER
+══════════════════════════════════════════════ -->
+  <header class="page-header">
+    <div class="brand">
+      <div class="brand-icon">🔐</div>
+      <div>
+        <div class="brand-title">BiometricAuth Platform</div>
+        <div class="brand-sub">Trusted Device Simulator — Port 3002</div>
+      </div>
+    </div>
+    <div style="display:flex;gap:8px;align-items:center;">
+      <div class="conn-pill" id="connPill">
+        <div class="conn-dot" id="connDot"></div>
+        <span id="connLabel">Disconnected</span>
+      </div>
+      <button id="reconnectBtn" onclick="manualReconnect()"
+        style="padding:6px 14px;border-radius:20px;border:1px solid rgba(139,92,246,.4);background:rgba(139,92,246,.1);color:#a78bfa;font-size:12px;font-weight:600;cursor:pointer;transition:all .2s;"
+        onmouseover="this.style.background='rgba(139,92,246,.2)'"
+        onmouseout="this.style.background='rgba(139,92,246,.1)'">↺ Reconnect</button>
+    </div>
+  </header>
+
+  <!-- ══════════════════════════════════════════════
+     MAIN LAYOUT
+══════════════════════════════════════════════ -->
+  <main class="layout">
+
+    <!-- ─────────────────────────────────────────
+       LEFT PANEL — Registration & Activity
+  ───────────────────────────────────────── -->
+    <aside class="panel" id="leftPanel">
+
+      <!-- Registration form -->
+      <div class="card" id="regCard">
+        <div class="card-title">Device Registration</div>
+        <div class="form-group">
+          <label class="lbl" for="userIdInput">User ID</label>
+          <input type="text" id="userIdInput" class="inp" placeholder="e.g. user_alice_01" autocomplete="off" />
+        </div>
+        <button class="btn btn-primary" id="regBtn" onclick="registerDevice()">
+          Register Trusted Device
+        </button>
+      </div>
+
+      <!-- Registered user status (hidden until registered) -->
+      <div class="card hidden" id="userCard">
+        <div class="card-title">Active Device</div>
+        <div class="user-row">
+          <div class="avatar" id="avatarEl">?</div>
+          <div class="u-info">
+            <div class="u-name" id="uNameEl">—</div>
+            <div class="u-role">Trusted Device · Online</div>
+          </div>
+          <div class="u-dot"></div>
+        </div>
+        <button class="btn btn-ghost mt8" onclick="unregisterDevice()" style="font-size:11.5px;padding:7px;">⇠ Switch
+          User</button>
+      </div>
+
+      <!-- Active session info -->
+      <div class="card hidden" id="sessionCard">
+        <div class="card-title">Active Session</div>
+        <div class="kv"><span class="kv-k">Session ID</span><span class="kv-v" id="kv-sid">—</span></div>
+        <div class="kv"><span class="kv-k">Status</span><span class="kv-v" id="kv-status">PENDING</span></div>
+      </div>
+
+      <!-- Activity log -->
+      <div class="card" style="flex:1;overflow:hidden;display:flex;flex-direction:column;">
+        <div class="card-title">Activity Log</div>
+        <div class="log-wrap" id="logWrap">
+          <div class="log-entry info">
+            <span class="log-t">--:--</span>
+            <span class="log-m">Simulator loaded. Register a device to begin.</span>
+          </div>
+        </div>
+      </div>
+
+    </aside>
+
+    <!-- ─────────────────────────────────────────
+       CENTER — Phone Simulator
+  ───────────────────────────────────────── -->
+    <div class="phone-col">
+      <div class="phone-frame">
+
+        <!-- Physical buttons -->
+        <div class="phone-btn pbtn-vol-up"></div>
+        <div class="phone-btn pbtn-vol-down"></div>
+        <div class="phone-btn pbtn-power"></div>
+
+        <!-- Shell -->
+        <div class="phone-shell"></div>
+
+        <!-- Screen -->
+        <div class="phone-screen" id="phoneScreen">
+
+          <!-- Dynamic Island -->
+          <div class="di" id="di">
+            <div class="di-cam"></div>
+            <div class="di-body">
+              <span class="di-ico">🔐</span>
+              <div>
+                <div class="di-txt">BiometricAuth</div>
+                <div class="di-sub">Login attempt detected</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Status bar -->
+          <div class="status-bar">
+            <span id="statusTime" style="letter-spacing:-.5px;">12:00</span>
+            <div class="status-icons">
+              <span style="letter-spacing:1px;">●●●</span>
+              <span>WiFi</span>
+              <span>🔋</span>
+            </div>
+          </div>
+
+          <!-- ── VIEW: LOCK SCREEN ── -->
+          <div class="view view-lock active" id="viewLock">
+            <div class="lock-clock" id="lockClock">12:00</div>
+            <div class="lock-date" id="lockDate">Friday, 18 July</div>
+            <div class="lock-art">🔐</div>
+            <div class="lock-hint">
+              <div class="lock-hint-dot"></div>
+              <span id="lockHint">Register device to receive alerts</span>
+            </div>
+            <div class="home-bar"></div>
+          </div>
+
+          <!-- ── VIEW: WORD GAME ── -->
+          <div class="view view-verify" id="viewVerify">
+            <div class="vfy-head">
+              <span class="vfy-icon">🛡️</span>
+              <div class="vfy-title">Verify Login Request</div>
+              <div class="vfy-sid" id="vfy-sid">session_id</div>
+            </div>
+
+            <div class="vfy-hint">
+              <strong>2-of-5 Word Challenge</strong>
+              Look at your <strong>login screen</strong>. Select the same 2 words shown there, in the exact same order.
+            </div>
+
+            <!-- Word pills rendered by JS -->
+            <div class="words-grid" id="wordsGrid"></div>
+
+            <!-- Selected words preview -->
+            <div class="sel-preview" id="selPreview">
+              <span class="sel-ph">No words selected yet</span>
+            </div>
+
+            <div class="vfy-actions">
+              <button class="btn-clear" onclick="clearWords()">↺ Clear Selection</button>
+              <button class="btn-submit" id="submitBtn" onclick="submitWords()" disabled>✓ Confirm Selection</button>
+              <button class="btn-deny" onclick="denyLogin()">✕ Deny Login Request</button>
+            </div>
+            <div class="home-bar"></div>
+          </div>
+
+          <!-- ── VIEW: RESULT ── -->
+          <div class="view view-result" id="viewResult">
+            <div class="res-icon" id="resIcon">✅</div>
+            <div class="res-title" id="resTitle">Approved</div>
+            <div class="res-subtitle" id="resSub">Login verified. The browser session is now active.</div>
+            <div class="res-timer" id="resTimer">Resetting in 5s…</div>
+            <div class="home-bar"></div>
+          </div>
+
+          <!-- Notification banner (overlays all views) -->
+          <div class="notif-banner" id="notifBanner">
+            <div class="nb-head">
+              <div class="nb-app-icon">🔐</div>
+              <span class="nb-app-name">BiometricAuth</span>
+              <span class="nb-time" id="nb-time">now</span>
+            </div>
+            <div class="nb-title">⚠️ Login Request Triggered!</div>
+            <div class="nb-body" id="nb-body">Someone is attempting to log in.</div>
+          </div>
+
+        </div><!-- /phone-screen -->
+      </div><!-- /phone-frame -->
+    </div><!-- /phone-col -->
+
+    <!-- ─────────────────────────────────────────
+       RIGHT PANEL — QR Mock Scanner
+  ───────────────────────────────────────── -->
+    <aside class="panel" id="rightPanel">
+
+      <!-- QR scanner mock -->
+      <div class="card">
+        <div class="card-title">QR Code — Mock Scanner</div>
+        <p style="font-size:11.5px;color:var(--text-muted);margin-bottom:12px;line-height:1.55;">
+          Paste the validation URL from the QR code shown on the login screen to simulate a phone camera scan.
+        </p>
+        <div class="form-group">
+          <label class="lbl" for="qrInput">QR Validation URL</label>
+          <textarea id="qrInput" class="qr-textarea"
+            placeholder="http://localhost:3002/api/qr/verify?session=...&token=..." oninput="parseQR()"></textarea>
+        </div>
+
+        <!-- Parsed params -->
+        <div class="parsed-box hidden" id="parsedBox">
+          <div class="prow"><span class="pk">session</span><span class="pv" id="p-session">—</span></div>
+          <div class="prow"><span class="pk">token</span><span class="pv" id="p-token">—</span></div>
+        </div>
+
+        <button class="btn btn-primary mt8" id="scanBtn" onclick="simulateScan()" disabled>
+          📷 &nbsp;Simulate QR Scan
+        </button>
+
+        <div id="qrResult" class="hidden mt8"></div>
+      </div>
+
+      <!-- QR countdown (hidden until a scan is attempted) -->
+      <div class="card hidden" id="qrStatusCard">
+        <div class="card-title">QR Session Status</div>
+        <div class="kv"><span class="kv-k">Expires in</span><span class="kv-v" id="qr-countdown">—</span></div>
+        <div class="kv"><span class="kv-k">Status</span><span class="kv-v" id="qr-status">PENDING</span></div>
+      </div>
+
+      <!-- Developer tips -->
+      <div class="card" style="flex:1;">
+        <div class="card-title">Developer Tips</div>
+        <div class="flex-gap8">
+          <div class="tip tip-cyan">
+            <div class="tip-head" style="color:var(--cyan);">🔵 Word Game Flow</div>
+            <div class="tip-body">
+              1. Login screen → <code>POST /api/notification/initiate</code><br>
+              2. Server emits <code>notification_request</code> here<br>
+              3. Select 2 words in order → Submit
+            </div>
+          </div>
+          <div class="tip tip-purple">
+            <div class="tip-head" style="color:var(--purple-light);">🟣 QR Code Flow</div>
+            <div class="tip-body">
+              1. Login screen → <code>POST /api/qr/generate</code><br>
+              2. Copy the URL from the QR image<br>
+              3. Paste here → Simulate Scan (GET)
+            </div>
+          </div>
+          <div class="tip tip-green">
+            <div class="tip-head" style="color:var(--green);">🟢 Socket Events</div>
+            <div class="tip-body">
+              <code>join_simulator</code> → register<br>
+              <code>notification_request</code> → receive alert<br>
+              <code>submit_word_verification</code> → answer<br>
+              <code>simulator_reject</code> → deny login
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </aside>
+
+  </main><!-- /layout -->
+
+
+  <!-- ══════════════════════════════════════════════
+     JAVASCRIPT
+══════════════════════════════════════════════ -->
+  <script>
+    /* ────────────────────────────────────────────────
+       STATE
+    ──────────────────────────────────────────────── */
+    const S = {
+      socket: null,
+      userId: null,
+      sessionId: null,
+      words: [],
+      selected: [],       // ordered selection (max 2)
+      qrSessionId: null,
+      qrToken: null,
+      qrTimer: null,
+      qrExpiresAt: null,
+    };
+
+    /* ────────────────────────────────────────────────
+       CLOCK
+    ──────────────────────────────────────────────── */
+    (function tickClock() {
+      const now = new Date();
+      const hh = String(now.getHours()).padStart(2, '0');
+      const mm = String(now.getMinutes()).padStart(2, '0');
+      const time = `${hh}:${mm}`;
+      const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+      const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+      document.getElementById('lockClock').textContent = time;
+      document.getElementById('statusTime').textContent = time;
+      document.getElementById('lockDate').textContent =
+        `${DAYS[now.getDay()]}, ${now.getDate()} ${MONTHS[now.getMonth()]}`;
+      setTimeout(tickClock, 10000);
+    })();
+
+    /* ────────────────────────────────────────────────
+       LOGGING
+    ──────────────────────────────────────────────── */
+    function log(msg, type = 'info') {
+      const wrap = document.getElementById('logWrap');
+      const t = new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      const el = document.createElement('div');
+      el.className = `log-entry ${type}`;
+      el.innerHTML = `<span class="log-t">${t}</span><span class="log-m">${msg}</span>`;
+      wrap.prepend(el);
+      while (wrap.children.length > 25) wrap.removeChild(wrap.lastChild);
+    }
+
+    /* ────────────────────────────────────────────────
+       VIEWS
+    ──────────────────────────────────────────────── */
+    function showView(id) {
+      document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+      document.getElementById(id)?.classList.add('active');
+    }
+
+    /* ────────────────────────────────────────────────
+       SOCKET.IO
+    ──────────────────────────────────────────────── */
+    function initSocket() {
+      S.socket = io('http://localhost:3002', {
+        transports: ['polling', 'websocket'], // polling-first: more reliable on localhost
+        reconnectionAttempts: Infinity,
+        reconnectionDelay: 1000,
+        reconnectionDelayMax: 5000,
+        timeout: 10000,
+      });
+
+      // Manager-level events (must be on socket.io, not socket, in v4)
+      S.socket.io.on('reconnect_attempt', (n) => {
+        log(`Reconnecting… attempt ${n}`, 'warning');
+        document.getElementById('connLabel').textContent = `Retrying (${n})`;
+      });
+
+      S.socket.io.on('reconnect', () => {
+        log('Reconnected to server ✔', 'success');
+        if (S.userId) {
+          S.socket.emit('join_simulator', { userId: S.userId });
+          log(`Re-registered as <strong>${S.userId}</strong> after reconnect`, 'info');
+        }
+      });
+
+      S.socket.io.on('reconnect_failed', () => {
+        log('All reconnect attempts failed. Click ↺ Reconnect.', 'error');
+      });
+
+      S.socket.on('connect', () => {
+        setConn(true);
+        log('Connected to verification server ✔', 'success');
+      });
+
+      S.socket.on('disconnect', reason => {
+        setConn(false);
+        log(`Disconnected — ${reason}`, 'error');
+      });
+
+      S.socket.on('connect_error', (err) => {
+        console.error('[Socket.IO] connect_error:', err.message, err);
+        log(`Connection error: ${err.message}`, 'error');
+      });
+
+      S.socket.on('simulator_joined', d => {
+        log(`Simulator registered as <strong>${d.userId}</strong>`, 'success');
+        document.getElementById('lockHint').textContent = `Listening as ${d.userId}`;
+      });
+
+      /* ── Main push event ── */
+      S.socket.on('notification_request', payload => {
+        log(`📲 Push received · session <strong>${short(payload.sessionId)}</strong>`, 'warning');
+        onNotificationRequest(payload);
+      });
+
+      /* ── Word game result echoed back from server ── */
+      S.socket.on('word_verification_result', d => {
+        if (d.success) {
+          log('Word verification accepted ✔', 'success');
+          showResult(true, 'Login Approved 🎉', 'The browser session is now active.');
+        } else {
+          log(`Word verification failed: ${d.reason}`, 'error');
+          showResult(false, 'Incorrect Words', d.reason ?? 'Words did not match.');
+        }
+      });
+
+      /* ── Session status events (broadcast to simulator room too) ── */
+      S.socket.on('verification_approved', () => setStatus('APPROVED', '#10b981'));
+      S.socket.on('verification_rejected', () => setStatus('REJECTED', '#ef4444'));
+      S.socket.on('verification_expired', () => setStatus('EXPIRED', '#f59e0b'));
+
+      S.socket.on('error', d => log(`Server error: ${d.message}`, 'error'));
+    }
+
+    function setConn(online) {
+      document.getElementById('connDot').className = `conn-dot ${online ? 'online' : ''}`;
+      document.getElementById('connLabel').textContent = online ? 'Connected' : 'Disconnected';
+    }
+
+    /* ────────────────────────────────────────────────
+       DEVICE REGISTRATION
+    ──────────────────────────────────────────────── */
+    function registerDevice() {
+      const uid = document.getElementById('userIdInput').value.trim();
+      if (!uid) { log('Please enter a User ID.', 'error'); return; }
+      if (!S.socket?.connected) { log('Not connected to server.', 'error'); return; }
+
+      S.userId = uid;
+      S.socket.emit('join_simulator', { userId: uid });
+
+      // Update UI
+      document.getElementById('regCard').classList.add('hidden');
+      document.getElementById('userCard').classList.remove('hidden');
+      document.getElementById('avatarEl').textContent = uid[0].toUpperCase();
+      document.getElementById('uNameEl').textContent = uid;
+      document.getElementById('lockHint').textContent = `Listening as ${uid}…`;
+
+      log(`Registering as trusted device for <strong>${uid}</strong>`, 'info');
+    }
+
+    function unregisterDevice() {
+      S.userId = null; S.sessionId = null; S.words = []; S.selected = [];
+      document.getElementById('regCard').classList.remove('hidden');
+      document.getElementById('userCard').classList.add('hidden');
+      document.getElementById('sessionCard').classList.add('hidden');
+      document.getElementById('userIdInput').value = '';
+      document.getElementById('lockHint').textContent = 'Register device to receive alerts';
+      showView('viewLock');
+      log('Device unregistered.', 'info');
+    }
+
+    /* ────────────────────────────────────────────────
+       NOTIFICATION REQUEST HANDLER
+    ──────────────────────────────────────────────── */
+    function onNotificationRequest({ sessionId, words = [], type = 'word_game' }) {
+      S.sessionId = sessionId;
+      S.words = words;
+
+      // Session card
+      document.getElementById('sessionCard').classList.remove('hidden');
+      document.getElementById('kv-sid').textContent = short(sessionId);
+      document.getElementById('kv-status').textContent = 'PENDING';
+      document.getElementById('kv-status').style.color = '#8b5cf6';
+
+      expandDI();
+      showBanner(`Session: ${short(sessionId)}`);
+      playRingtone();
+      vibrate();
+
+      // After banner → show word game
+      setTimeout(() => {
+        hideBanner();
+        collapseDI();
+        loadWordGame(sessionId, words);
+      }, 2600);
+    }
+
+    /* ────────────────────────────────────────────────
+       DYNAMIC ISLAND
+    ──────────────────────────────────────────────── */
+    function expandDI() { document.getElementById('di').classList.add('open'); }
+    function collapseDI() { document.getElementById('di').classList.remove('open'); }
+
+    /* ────────────────────────────────────────────────
+       NOTIFICATION BANNER
+    ──────────────────────────────────────────────── */
+    function showBanner(body) {
+      const t = new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+      document.getElementById('nb-time').textContent = t;
+      document.getElementById('nb-body').textContent = body;
+      document.getElementById('notifBanner').classList.add('show');
+    }
+    function hideBanner() { document.getElementById('notifBanner').classList.remove('show'); }
+
+    /* ────────────────────────────────────────────────
+       WORD GAME
+    ──────────────────────────────────────────────── */
+    function loadWordGame(sessionId, words) {
+      S.selected = [];
+      document.getElementById('vfy-sid').textContent = short(sessionId);
+
+      const grid = document.getElementById('wordsGrid');
+      grid.innerHTML = '';
+
+      words.forEach((word, i) => {
+        const pill = document.createElement('div');
+        pill.className = 'word-pill';
+        pill.id = `pill-${i}`;
+        pill.dataset.word = word;
+        pill.dataset.index = i;
+        pill.innerHTML = `<span style="font-weight:600;letter-spacing:.02em;">${word}</span><div class="wp-badge" id="badge-${i}">—</div>`;
+        pill.onclick = () => toggleWord(word, i);
+        grid.appendChild(pill);
+      });
+
+      refreshPreview();
+      document.getElementById('submitBtn').disabled = true;
+      showView('viewVerify');
+    }
+
+    function toggleWord(word, idx) {
+      const already = S.selected.indexOf(word);
+
+      if (already !== -1) {
+        S.selected.splice(already, 1);
+      } else {
+        if (S.selected.length >= 2) { log('Max 2 words allowed.', 'warning'); return; }
+        S.selected.push(word);
+      }
+
+      // Re-render all pill states
+      S.words.forEach((w, i) => {
+        const pill = document.getElementById(`pill-${i}`);
+        const badge = document.getElementById(`badge-${i}`);
+        const order = S.selected.indexOf(w) + 1;
+
+        if (order > 0) {
+          pill.classList.add('selected');
+          pill.classList.remove('dim');
+          badge.textContent = order;
+        } else {
+          pill.classList.remove('selected');
+          badge.textContent = '—';
+        }
+
+        // Dim unchosen pills when 2 are selected
+        if (S.selected.length === 2 && order === 0) {
+          pill.classList.add('dim');
+        } else if (S.selected.length < 2) {
+          pill.classList.remove('dim');
+        }
+      });
+
+      refreshPreview();
+      document.getElementById('submitBtn').disabled = S.selected.length !== 2;
+    }
+
+    function clearWords() {
+      S.selected = [];
+      S.words.forEach((_, i) => {
+        document.getElementById(`pill-${i}`)?.classList.remove('selected', 'dim');
+        const b = document.getElementById(`badge-${i}`);
+        if (b) b.textContent = '—';
+      });
+      refreshPreview();
+      document.getElementById('submitBtn').disabled = true;
+    }
+
+    function refreshPreview() {
+      const el = document.getElementById('selPreview');
+      if (!S.selected.length) {
+        el.innerHTML = '<span class="sel-ph">No words selected yet</span>';
+        return;
+      }
+      el.innerHTML = S.selected.map((w, i) =>
+        `<span class="sel-chip">${w}</span>${i < S.selected.length - 1 ? '<span class="sel-arrow">→</span>' : ''}`
+      ).join('');
+    }
+
+    function submitWords() {
+      if (!S.socket || !S.sessionId || S.selected.length !== 2) return;
+      const btn = document.getElementById('submitBtn');
+      btn.innerHTML = '<span class="spinner"></span> Verifying…';
+      btn.disabled = true;
+      log(`Submitting: [${S.selected.join(', ')}]`, 'info');
+      S.socket.emit('submit_word_verification', { sessionId: S.sessionId, chosenWords: S.selected });
+    }
+
+    function denyLogin() {
+      if (!S.socket || !S.sessionId) return;
+      log('User denied the login request.', 'warning');
+      S.socket.emit('simulator_reject', { sessionId: S.sessionId });
+      showResult(false, 'Login Denied', 'You rejected this login attempt.');
+      setStatus('REJECTED', '#ef4444');
+    }
+
+    /* ────────────────────────────────────────────────
+       RESULT VIEW
+    ──────────────────────────────────────────────── */
+    function showResult(ok, title, subtitle) {
+      const view = document.getElementById('viewResult');
+      view.className = `view view-result ${ok ? 'ok' : 'err'}`;
+      document.getElementById('resIcon').textContent = ok ? '✅' : '❌';
+      document.getElementById('resTitle').textContent = title;
+      document.getElementById('resSub').textContent = subtitle;
+      setStatus(ok ? 'APPROVED' : 'REJECTED', ok ? '#10b981' : '#ef4444');
+      showView('viewResult');
+
+      let n = 5;
+      const timer = document.getElementById('resTimer');
+      timer.textContent = `Resetting in ${n}s…`;
+      const iv = setInterval(() => {
+        timer.textContent = `Resetting in ${--n}s…`;
+        if (n <= 0) { clearInterval(iv); resetToLock(); }
+      }, 1000);
+    }
+
+    function resetToLock() {
+      S.sessionId = null; S.words = []; S.selected = [];
+      document.getElementById('sessionCard').classList.add('hidden');
+      if (S.userId) document.getElementById('lockHint').textContent = `Listening as ${S.userId}`;
+      showView('viewLock');
+    }
+
+    function setStatus(text, color) {
+      const el = document.getElementById('kv-status');
+      el.textContent = text;
+      el.style.color = color;
+    }
+
+    /* ────────────────────────────────────────────────
+       QR MOCK SCANNER
+    ──────────────────────────────────────────────── */
+    function parseQR() {
+      const raw = document.getElementById('qrInput').value.trim();
+      const box = document.getElementById('parsedBox');
+      const scanBtn = document.getElementById('scanBtn');
+
+      try {
+        const url = new URL(raw);
+        const session = url.searchParams.get('session');
+        const token = url.searchParams.get('token');
+
+        if (session && token) {
+          S.qrSessionId = session;
+          S.qrToken = token;
+          document.getElementById('p-session').textContent = short(session);
+          document.getElementById('p-token').textContent = token.slice(0, 16) + '…';
+          box.classList.remove('hidden');
+          scanBtn.disabled = false;
+        } else {
+          box.classList.add('hidden');
+          scanBtn.disabled = true;
+          S.qrSessionId = S.qrToken = null;
+        }
+      } catch {
+        box.classList.add('hidden');
+        scanBtn.disabled = true;
+      }
+    }
+
+    async function simulateScan() {
+      if (!S.qrSessionId || !S.qrToken) return;
+
+      const btn = document.getElementById('scanBtn');
+      btn.innerHTML = '<span class="spinner"></span> Scanning…';
+      btn.disabled = true;
+
+      log(`Simulating QR scan · session <strong>${short(S.qrSessionId)}</strong>`, 'info');
+
+      try {
+        const res = await fetch(
+          `/api/qr/verify?session=${encodeURIComponent(S.qrSessionId)}&token=${encodeURIComponent(S.qrToken)}`
+        );
+        const data = await res.json();
+        renderQRResult(data.success, data.reason);
+
+        if (data.expiresInSeconds) startQRCountdown(data.expiresInSeconds);
+      } catch (err) {
+        renderQRResult(false, `Network error: ${err.message}`);
+      } finally {
+        btn.innerHTML = '📷 &nbsp;Simulate QR Scan';
+        btn.disabled = false;
+      }
+    }
+
+    function renderQRResult(ok, reason) {
+      const el = document.getElementById('qrResult');
+      el.className = `qr-badge ${ok ? 'ok' : 'err'}`;
+      el.innerHTML = ok
+        ? `<span>✅</span><span>QR Verified — Session Approved</span>`
+        : `<span>❌</span><span>${reason ?? 'Verification failed'}</span>`;
+      el.classList.remove('hidden');
+      log(ok ? 'QR scan accepted ✔' : `QR scan failed: ${reason}`, ok ? 'success' : 'error');
+
+      if (ok) {
+        document.getElementById('qrStatusCard').classList.remove('hidden');
+        const s = document.getElementById('qr-status');
+        s.textContent = 'APPROVED'; s.style.color = '#10b981';
+      }
+    }
+
+    function startQRCountdown(secs) {
+      document.getElementById('qrStatusCard').classList.remove('hidden');
+      S.qrExpiresAt = Date.now() + secs * 1000;
+      if (S.qrTimer) clearInterval(S.qrTimer);
+      const el = document.getElementById('qr-countdown');
+      S.qrTimer = setInterval(() => {
+        const left = Math.max(0, Math.ceil((S.qrExpiresAt - Date.now()) / 1000));
+        el.textContent = left ? `${left}s` : 'Expired';
+        if (!left) {
+          clearInterval(S.qrTimer);
+          const st = document.getElementById('qr-status');
+          st.textContent = 'EXPIRED'; st.style.color = '#f59e0b';
+        }
+      }, 500);
+    }
+
+    /* ────────────────────────────────────────────────
+       AUDIO — Web Audio API ringtone
+    ──────────────────────────────────────────────── */
+    function playRingtone() {
+      try {
+        const ctx = new (window.AudioContext || window.webkitAudioContext)();
+        const notes = [880, 988, 1108, 988, 1108, 880];
+        let t = ctx.currentTime;
+        notes.forEach(freq => {
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.connect(gain); gain.connect(ctx.destination);
+          osc.type = 'sine';
+          osc.frequency.setValueAtTime(freq, t);
+          gain.gain.setValueAtTime(0, t);
+          gain.gain.linearRampToValueAtTime(0.14, t + 0.05);
+          gain.gain.linearRampToValueAtTime(0, t + 0.22);
+          osc.start(t); osc.stop(t + 0.25);
+          t += 0.21;
+        });
+      } catch { /* AudioContext blocked — silently skip */ }
+    }
+
+    /* ────────────────────────────────────────────────
+       VIBRATION FLASH
+    ──────────────────────────────────────────────── */
+    function vibrate() {
+      const ring = document.getElementById('vibeRing');
+      ring.classList.remove('active');
+      void ring.offsetWidth;                     // force reflow
+      ring.classList.add('active');
+      setTimeout(() => ring.classList.remove('active'), 1800);
+      if ('vibrate' in navigator) navigator.vibrate([200, 100, 200, 100, 200]);
+    }
+
+    /* ────────────────────────────────────────────────
+       UTILS
+    ──────────────────────────────────────────────── */
+    function short(id) {
+      if (!id) return '—';
+      return id.length > 12 ? `${id.slice(0, 8)}…${id.slice(-4)}` : id;
+    }
+
+    /* ────────────────────────────────────────────────
+       MANUAL RECONNECT
+    ──────────────────────────────────────────────── */
+    function manualReconnect() {
+      log('Manual reconnect triggered…', 'info');
+      if (S.socket) {
+        S.socket.disconnect();
+        S.socket.connect();
+      } else {
+        initSocket();
+      }
+    }
+
+    /* ────────────────────────────────────────────────
+       BOOT
+    ──────────────────────────────────────────────── */
+    initSocket();
+  </script>
+</body>
+
+</html>
