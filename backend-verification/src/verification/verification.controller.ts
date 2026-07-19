@@ -81,7 +81,7 @@ export class VerificationController {
 
     // ── Word-game flow ──
     if (verificationType === 'word_game') {
-      const { words } = this.notificationService.initiateNotificationVerification(sessionId);
+      const { words, answerIndices } = this.notificationService.initiateNotificationVerification(sessionId);
 
       // Push notification to the trusted device simulator if userId is provided
       if (userId && this.gateway.isSimulatorOnline(userId)) {
@@ -94,6 +94,7 @@ export class VerificationController {
         verificationType: 'word_game',
         sessionId,
         words, // Displayed on the login screen
+        answerIndices, // Highlighted on the login screen
         wordCount: words.length,
         requiredSelections: 2,
         message: 'Display these 5 words on the login screen. The user selects 2 on their trusted device.',
@@ -103,6 +104,12 @@ export class VerificationController {
     // ── QR-code flow ──
     if (verificationType === 'qr') {
       const result = await this.qrService.generateQRChallenge(sessionId);
+
+      // Push notification to the trusted device simulator if userId is provided
+      if (userId && this.gateway.isSimulatorOnline(userId)) {
+        this.gateway.pushNotificationAlert(userId, sessionId, [], 'qr', result.validationUrl);
+        this.logger.log(`Pushed QR alert to simulator for userId=${userId}`);
+      }
 
       return {
         success: true,

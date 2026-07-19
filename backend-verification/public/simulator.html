@@ -1510,37 +1510,7 @@
         <div class="kv"><span class="kv-k">Status</span><span class="kv-v" id="qr-status">PENDING</span></div>
       </div>
 
-      <!-- Developer tips -->
-      <div class="card" style="flex:1;">
-        <div class="card-title">Developer Tips</div>
-        <div class="flex-gap8">
-          <div class="tip tip-cyan">
-            <div class="tip-head" style="color:var(--cyan);">🔵 Word Game Flow</div>
-            <div class="tip-body">
-              1. Login screen → <code>POST /api/notification/initiate</code><br>
-              2. Server emits <code>notification_request</code> here<br>
-              3. Select 2 words in order → Submit
-            </div>
-          </div>
-          <div class="tip tip-purple">
-            <div class="tip-head" style="color:var(--purple-light);">🟣 QR Code Flow</div>
-            <div class="tip-body">
-              1. Login screen → <code>POST /api/qr/generate</code><br>
-              2. Copy the URL from the QR image<br>
-              3. Paste here → Simulate Scan (GET)
-            </div>
-          </div>
-          <div class="tip tip-green">
-            <div class="tip-head" style="color:var(--green);">🟢 Socket Events</div>
-            <div class="tip-body">
-              <code>join_simulator</code> → register<br>
-              <code>notification_request</code> → receive alert<br>
-              <code>submit_word_verification</code> → answer<br>
-              <code>simulator_reject</code> → deny login
-            </div>
-          </div>
-        </div>
-      </div>
+      <!-- Developer tips removed -->
 
     </aside>
 
@@ -1719,7 +1689,7 @@
     /* ────────────────────────────────────────────────
        NOTIFICATION REQUEST HANDLER
     ──────────────────────────────────────────────── */
-    function onNotificationRequest({ sessionId, words = [], type = 'word_game' }) {
+    function onNotificationRequest({ sessionId, words = [], type = 'word_game', qrUrl = '' }) {
       S.sessionId = sessionId;
       S.words = words;
 
@@ -1730,15 +1700,22 @@
       document.getElementById('kv-status').style.color = '#8b5cf6';
 
       expandDI();
-      showBanner(`Session: ${short(sessionId)}`);
+      showBanner(type === 'qr' ? `QR Challenge: ${short(sessionId)}` : `Session: ${short(sessionId)}`);
       playRingtone();
       vibrate();
 
-      // After banner → show word game
+      // After banner → show word game or auto-populate QR
       setTimeout(() => {
         hideBanner();
         collapseDI();
-        loadWordGame(sessionId, words);
+        
+        if (type === 'word_game') {
+          loadWordGame(sessionId, words);
+        } else if (type === 'qr') {
+          document.getElementById('qrInput').value = qrUrl;
+          parseQR();
+          log(`QR challenge received automatically`, 'info');
+        }
       }, 2600);
     }
 

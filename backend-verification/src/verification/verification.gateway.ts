@@ -31,7 +31,8 @@ interface SimulatorAlertPayload {
   sessionId: string;
   userId: string;
   words: string[];          // 5 words displayed on the login screen
-  type: 'word_game' | 'approve_deny';
+  type: 'word_game' | 'approve_deny' | 'qr';
+  qrUrl?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -276,7 +277,8 @@ export class VerificationGateway
     userId: string,
     sessionId: string,
     words: string[],
-    type: 'word_game' | 'approve_deny' = 'word_game',
+    type: 'word_game' | 'approve_deny' | 'qr' = 'word_game',
+    qrUrl?: string,
   ): void {
     const room = simulatorRoom(userId);
     const payload: SimulatorAlertPayload = {
@@ -284,6 +286,7 @@ export class VerificationGateway
       userId,
       words,
       type,
+      qrUrl,
     };
 
     this.server.to(room).emit('notification_request', payload);

@@ -1,0 +1,189 @@
+@import "tailwindcss";
+
+/* ─── Design Tokens ───────────────────────────────────────────────────────── */
+@theme {
+  --color-brand:       #ffffff;
+  --color-brand-light: #e4e4e7; /* zinc-200 */
+  --color-brand-dim:   #a1a1aa; /* zinc-400 */
+  
+  /* Map teal-glow utilities in TSX to a sleek neutral white/gray */
+  --color-teal-glow:   #ffffff;
+  
+  --font-family-sans: 'Geist Pixel', system-ui, -apple-system, sans-serif;
+}
+
+/* ─── Base ────────────────────────────────────────────────────────────────── */
+@layer base {
+  *, *::before, *::after { box-sizing: border-box; margin: 0; }
+
+  html { scroll-behavior: smooth; font-size: 16px; }
+
+  body {
+    font-family: 'Geist Pixel', system-ui, -apple-system, sans-serif;
+    background-color: #000000;
+    color: #ededed;
+    -webkit-font-smoothing: none; /* Pixel fonts often look better without smoothing */
+    min-height: 100vh;
+    /* Clean, subtle background instead of neon gradients */
+    background-image: radial-gradient(circle at 50% 0%, rgba(255,255,255,0.04) 0%, transparent 60%);
+    background-attachment: fixed;
+  }
+
+  #root { min-height: 100vh; display: flex; flex-direction: column; }
+  ::selection { background: rgba(255,255,255,0.15); color: #ffffff; }
+}
+
+/* ─── Components ──────────────────────────────────────────────────────────── */
+@layer components {
+
+  /* Card */
+  .card, .glass-card {
+    background: linear-gradient(180deg, #121212 0%, #0a0a0a 100%);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-top: 1px solid rgba(255,255,255,0.15);
+    border-radius: 16px;
+    position: relative;
+    overflow: hidden;
+    box-shadow: 
+      0 12px 32px -4px rgba(0,0,0,0.8),
+      inset 0 1px 0 rgba(255,255,255,0.05);
+    transition: border-color 0.2s ease;
+  }
+  
+  /* Input */
+  .field-input, .input-dark {
+    width: 100%;
+    height: 48px;
+    padding: 0 16px;
+    background: #000000;
+    border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 8px;
+    color: #ededed;
+    font-family: inherit;
+    font-size: 1rem;
+    outline: none;
+    transition: all 0.2s ease;
+  }
+  .field-input::placeholder, .input-dark::placeholder { color: rgba(255,255,255,0.3); }
+  .field-input:hover, .input-dark:hover {
+    border-color: rgba(255,255,255,0.2);
+  }
+  .field-input:focus, .input-dark:focus {
+    border-color: rgba(255,255,255,0.4);
+    box-shadow: 0 0 0 2px rgba(255,255,255,0.1);
+  }
+
+  /* Field label */
+  .field-label {
+    display: block;
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: rgba(255,255,255,0.6);
+    margin-bottom: 8px;
+  }
+
+  /* Primary button */
+  .btn-primary, .btn-glow {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    height: 48px;
+    padding: 0 24px;
+    font-family: inherit;
+    font-size: 1rem;
+    font-weight: 500;
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 8px;
+    cursor: pointer;
+    background: #ffffff;
+    color: #000000;
+    transition: all 0.2s ease;
+    box-shadow: 0 2px 8px rgba(255,255,255,0.1);
+  }
+  .btn-primary:hover:not(:disabled), .btn-glow:hover:not(:disabled) {
+    background: #f4f4f5;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(255,255,255,0.15);
+  }
+  .btn-primary:active:not(:disabled), .btn-glow:active:not(:disabled) { 
+    transform: translateY(0); 
+    background: #e4e4e7;
+  }
+  .btn-primary:disabled, .btn-glow:disabled { 
+    opacity: 0.5; 
+    cursor: not-allowed; 
+  }
+
+  /* Outline button */
+  .btn-outline, .btn-ghost {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    height: 44px;
+    padding: 0 20px;
+    font-family: inherit;
+    font-size: 0.875rem;
+    font-weight: 500;
+    border-radius: 8px;
+    cursor: pointer;
+    background: transparent;
+    color: #ededed;
+    border: 1px solid rgba(255,255,255,0.12);
+    transition: all 0.2s ease;
+  }
+  .btn-outline:hover:not(:disabled), .btn-ghost:hover:not(:disabled) {
+    background: rgba(255,255,255,0.05);
+    border-color: rgba(255,255,255,0.2);
+  }
+  .btn-outline:disabled, .btn-ghost:disabled { 
+    opacity: 0.4; 
+    cursor: not-allowed; 
+  }
+
+  /* Badges */
+  .badge-pending  { display: inline-flex; align-items: center; gap: 5px; padding: 4px 10px; border-radius: 6px; font-size: 0.75rem; font-weight: 500; background: rgba(245,158,11,0.1); color: #fbbf24; border: 1px solid rgba(245,158,11,0.2); }
+  .badge-approved { display: inline-flex; align-items: center; gap: 5px; padding: 4px 10px; border-radius: 6px; font-size: 0.75rem; font-weight: 500; background: rgba(255,255,255,0.1);  color: #ffffff; border: 1px solid rgba(255,255,255,0.2); }
+  .badge-rejected { display: inline-flex; align-items: center; gap: 5px; padding: 4px 10px; border-radius: 6px; font-size: 0.75rem; font-weight: 500; background: rgba(239,68,68,0.1);  color: #f87171; border: 1px solid rgba(239,68,68,0.2);  }
+
+  /* Text helpers */
+  .text-neon { color: #ffffff; }
+  .text-teal-glow { color: #ffffff; }
+  .border-teal { border-color: rgba(255,255,255,0.15); }
+  .glow-teal { box-shadow: none; }
+
+  /* Divider */
+  .divider {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    color: rgba(255,255,255,0.3);
+    font-size: 0.75rem;
+  }
+  .divider::before, .divider::after {
+    content: ''; flex: 1; height: 1px;
+    background: rgba(255,255,255,0.08);
+  }
+}
+
+/* ─── Utilities ───────────────────────────────────────────────────────────── */
+@layer utilities {
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(10px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes pulseSubtle {
+    0%, 100% { opacity: 1; }
+    50%       { opacity: 0.7; }
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .animate-fade-up    { animation: fadeUp 0.4s cubic-bezier(0.16,1,0.3,1) forwards; }
+  /* Override neon pulse with a simple opacity pulse */
+  .animate-pulse-glow { animation: pulseSubtle 2.5s ease-in-out infinite; box-shadow: none !important; }
+  .animate-spin       { animation: spin 0.8s linear infinite; }
+
+  /* Remove scanline visual, keep class so nothing breaks */
+  .scanline-bg { background: transparent; }
+}

@@ -1,0 +1,48 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ─── Models ───────────────────────────────────────────────────────────────────
+
+model User {
+  id           String       @id @default(uuid())
+  userId       String       @unique
+  name         String
+  age          Int
+  publicKey    String
+  recoveryHash String
+  createdAt    DateTime     @default(now())
+  credentials  Credential[]
+  loginEvents  LoginEvent[]
+}
+
+model Credential {
+  id          String   @id
+  userId      String
+  user        User     @relation(fields: [userId], references: [id])
+  publicKey   Bytes
+  signCounter BigInt
+  deviceLabel String?
+  createdAt   DateTime @default(now())
+}
+
+model LoginEvent {
+  id          String   @id @default(uuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id])
+  ipAddress   String
+  location    String
+  userAgent   String?
+  vpnDetected Boolean
+  successful  Boolean
+  safeScore   Int
+  timestamp   DateTime @default(now())
+}
